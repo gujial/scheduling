@@ -17,6 +17,7 @@
   services.getty.autologinUser = "root";
 
   environment.systemPackages = with pkgs; [
+    llvmPackages_18.clang-unwrapped
     clang_18
     llvm_18
     bpftools
@@ -30,9 +31,14 @@
     libelf
   ];
 
+  environment.variables = {
+    PKG_CONFIG_PATH = "${pkgs.libbpf}/lib/pkgconfig";
+    CPATH = "${pkgs.libbpf}/include";
+  };
+
   # 共享开发目录（将宿主机的代码目录挂载到 VM 内）
   virtualisation.sharedDirectories.src = {
-    source = "./"; # 宿主机当前目录
+    source = "/mnt/repos/scheduling"; # 宿主机当前目录
     target = "/src"; # VM 内挂载点
   };
 

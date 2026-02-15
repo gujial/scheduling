@@ -16,7 +16,7 @@
 
     devShells.${system}.default = pkgs.mkShell {
       buildInputs = with pkgs; [
-        clang_18
+        llvmPackages_18.clang-unwrapped
         llvm_18
         bpftools
         libbpf
@@ -24,10 +24,11 @@
         pahole
         gdb
         qemu_kvm
+        pkg-config
       ];
 
       shellHook = ''
-        export BPF_CLANG=${pkgs.clang_18}/bin/clang
+        export BPF_CLANG=${pkgs.llvmPackages_18.clang-unwrapped}/bin/clang
       '';
     };
   };

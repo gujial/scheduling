@@ -1,3 +1,7 @@
 .vscode/
 result
 ebpf-test-vm.qcow2
+sched
+sched.bpf.o
+sched.skel.h
+vmlinux.h
