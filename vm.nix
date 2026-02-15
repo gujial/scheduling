@@ -29,6 +29,7 @@
     pkg-config
     zlib
     libelf
+    tmux
   ];
 
   environment.variables = {
