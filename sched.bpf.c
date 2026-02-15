@@ -9,45 +9,45 @@ extern bool scx_bpf_dsq_move_to_local(u64 dsq_id) __ksym;
 
 char LICENSE[] SEC("license") = "GPL";
 
-#define SIMPLE_DSQ_ID 1
+#define DSQ_ID 1
 
-SEC("struct_ops.s/simple_init")
-s32 simple_init(void)
+SEC("struct_ops.s/init")
+s32 sched_init(void)
 {
-	if (scx_bpf_create_dsq(SIMPLE_DSQ_ID, -1))
+	if (scx_bpf_create_dsq(DSQ_ID, -1))
 		return -1;
 	return 0;
 }
 
-SEC("struct_ops.s/simple_exit")
-s32 BPF_PROG(simple_exit, struct scx_exit_info *ei)
+SEC("struct_ops.s/exit")
+s32 BPF_PROG(sched_exit, struct scx_exit_info *ei)
 {
 	(void)ei;
-	scx_bpf_destroy_dsq(SIMPLE_DSQ_ID);
+	scx_bpf_destroy_dsq(DSQ_ID);
 	return 0;
 }
 
-SEC("struct_ops/simple_enqueue")
-s32 BPF_PROG(simple_enqueue, struct task_struct *p, u64 enq_flags)
+SEC("struct_ops/enqueue")
+s32 BPF_PROG(enqueue, struct task_struct *p, u64 enq_flags)
 {
-	scx_bpf_dsq_insert(p, SIMPLE_DSQ_ID, SCX_SLICE_DFL, enq_flags);
+	scx_bpf_dsq_insert(p, DSQ_ID, SCX_SLICE_DFL, enq_flags);
 	return 0;
 }
 
-SEC("struct_ops/simple_dispatch")
-s32 BPF_PROG(simple_dispatch, s32 cpu, struct task_struct *prev)
+SEC("struct_ops/dispatch")
+s32 BPF_PROG(dispatch, s32 cpu, struct task_struct *prev)
 {
 	(void)cpu;
 	(void)prev;
-	scx_bpf_dsq_move_to_local(SIMPLE_DSQ_ID);
+	scx_bpf_dsq_move_to_local(DSQ_ID);
 	return 0;
 }
 
 SEC(".struct_ops")
-struct sched_ext_ops simple_ops = {
-	.enqueue = (void (*)(struct task_struct *, u64))simple_enqueue,
-	.dispatch = (void (*)(s32, struct task_struct *))simple_dispatch,
-	.init = simple_init,
-	.exit = (void (*)(struct scx_exit_info *))simple_exit,
-	.name = "simple_global",
+struct sched_ext_ops ops = {
+	.enqueue = (void (*)(struct task_struct *, u64))enqueue,
+	.dispatch = (void (*)(s32, struct task_struct *))dispatch,
+	.init = sched_init,
+	.exit = (void (*)(struct scx_exit_info *))sched_exit,
+	.name = "global",
 };
