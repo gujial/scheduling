@@ -25,6 +25,9 @@
         gdb
         qemu_kvm
         pkg-config
+        python3
+        python3Packages.matplotlib
+        stress-ng
       ];
 
       shellHook = ''

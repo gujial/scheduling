@@ -6,3 +6,4 @@ sched.bpf.o
 sched.skel.h
 vmlinux.h
 .direnv
+scx/
