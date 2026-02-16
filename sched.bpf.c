@@ -73,7 +73,7 @@ char LICENSE[] SEC("license") = "GPL";
 /*
 	定卦算法：根据进程的行为特征计算八卦类型（gua_type）。每个维度对应一个爻，三维度组合成八卦。
 	在 eBPF 中，我们可以实时监控进程的三个维度，每个维度根据阈值产生一个"阴（0）"或"阳（1）"：
-    	初爻（底部）：计算强度。CPU 利用率 > 50% 为阳，否则为阴。
+    	初爻（底部）：计算强度。CPU 利用率 > 30% 为阳，否则为阴。
     	二爻（中部）：交互频率。上下文切换/自愿睡眠频率高为阳（灵动），低为阴（沉稳）。
     	三爻（顶部）：内存/IO 足迹。RSS 内存占用或磁盘 IO 带宽大为阳，小为阴。
 */
@@ -86,6 +86,7 @@ static __always_inline u32 calculate_task_gua(struct task_struct *p, struct task
     u64 runtime = BPF_CORE_READ(p, se.sum_exec_runtime);
     u64 wall_time = 0;
     u64 delta_runtime = 0;
+    bool is_new_task = (tctx->last_run_timestamp == 0);
 
     if (tctx->last_run_timestamp > 0)
         wall_time = now - tctx->last_run_timestamp;
@@ -93,17 +94,33 @@ static __always_inline u32 calculate_task_gua(struct task_struct *p, struct task
     if (tctx->last_vruntime > 0 && runtime >= tctx->last_vruntime)
         delta_runtime = runtime - tctx->last_vruntime;
 
-    if (wall_time > 0 && delta_runtime > 0) {
-        u64 util = (delta_runtime * 1000) / wall_time;
-        if (util > 500) yao1 = 1; // 占用超过 50% 为阳
+    // 对于新任务或有足够历史数据的任务，使用不同的判断逻辑
+    if (wall_time > 1000000) {  // 至少1ms的wall time
+        if (delta_runtime > 0) {
+            u64 util = (delta_runtime * 1000) / wall_time;
+            if (util > 300) yao1 = 1; // 占用超过 30% 为阳（降低阈值）
+        }
+    } else if (is_new_task && runtime > 0) {
+        // 新任务：如果已经有些许运行时间，判定为计算型（阳）
+        yao1 = 1;
     }
 
     // --- 二爻：交互灵活性 ---
     // 检查自愿上下文切换 (nvcsw) 的频率
     u32 nvcsw = BPF_CORE_READ(p, nvcsw);
-    if (tctx->last_nvcsw > 0 && nvcsw > tctx->last_nvcsw &&
-        nvcsw - tctx->last_nvcsw > 50) { // 阈值根据经验设定
-        yao2 = 1; // 灵动为阳
+    
+    if (is_new_task) {
+        // 新任务：如果已经有上下文切换，可能是IO或交互型
+        if (nvcsw > 5) yao2 = 1;  // 降低阈值
+    } else if (tctx->last_nvcsw > 0 && nvcsw > tctx->last_nvcsw) {
+        u32 delta_nvcsw = nvcsw - tctx->last_nvcsw;
+        // 降低阈值到10，使其更灵敏
+        if (delta_nvcsw > 10) {
+            yao2 = 1; // 灵动为阳
+        }
+    } else if (nvcsw > 100) {
+        // 绝对值判断：总切换次数很多也算灵动
+        yao2 = 1;
     }
 
     // --- 三爻：空间足迹 ---
@@ -112,7 +129,8 @@ static __always_inline u32 calculate_task_gua(struct task_struct *p, struct task
     if (mm) {
         // 读取 RSS 计数 (需处理 eBPF 的 core read)
         long rss = BPF_CORE_READ(mm, rss_stat[0].count);
-        if (rss > 25600) { // 超过 100MB (4K page * 25600) 为阳
+        // 降低阈值到10MB (4K page * 2560)，使其更灵敏
+        if (rss > 2560) {
             yao3 = 1;
         }
     }
